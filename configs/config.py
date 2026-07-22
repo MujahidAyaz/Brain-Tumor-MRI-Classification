@@ -1,6 +1,6 @@
 from pathlib import Path
 
-# Project paths
+# Project Paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DATA_DIR = PROJECT_ROOT / "data"
@@ -14,24 +14,18 @@ LOG_DIR = OUTPUT_DIR / "logs"
 PLOT_DIR = OUTPUT_DIR / "plots"
 PREDICTION_DIR = OUTPUT_DIR / "predictions"
 
-# Dataset
-CLASS_NAMES = [
-    "glioma",
-    "meningioma",
-    "notumor",
-    "pituitary",
-]
-
-NUM_CLASSES = len(CLASS_NAMES)
-
 # Image
 IMAGE_SIZE = (224, 224)
-NUM_CHANNELS = 3
+NUM_CHANNELS = 1
 
 # Training
 BATCH_SIZE = 32
 NUM_EPOCHS = 30
-LEARNING_RATE = 0.001
+LR = 0.001
+
+# DataLoader
+NUM_WORKERS = 0
+PIN_MEMORY = True
 
 # Early Stopping
 PATIENCE = 5
