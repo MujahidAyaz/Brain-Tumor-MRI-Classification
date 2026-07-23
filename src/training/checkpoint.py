@@ -28,6 +28,17 @@ class CheckpointManager:
         model_dir: Path,
     ) -> None:
 
+        # Create output directories if they do not exist.
+        checkpoint_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        model_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
         self.model = model
 
         self.optimizer = optimizer
@@ -80,7 +91,9 @@ class CheckpointManager:
         )
 
     # Save only the best model weights.
-    def save_best_model(self) -> None:
+    def save_best_model(
+        self,
+    ) -> None:
 
         torch.save(
             self.model.state_dict(),

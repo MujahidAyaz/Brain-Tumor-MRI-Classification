@@ -1,12 +1,12 @@
 # Import required libraries.
 from configs.config import (
-    RANDOM_SEED,
     LOG_DIR,
+    RANDOM_SEED,
 )
 
 from src.data.dataloader import (
-    get_train_loader,
     get_test_loader,
+    get_train_loader,
 )
 
 from src.models.cnn import BrainTumorCNN
@@ -14,20 +14,24 @@ from src.models.cnn import BrainTumorCNN
 from src.training.trainer import Trainer
 
 from src.utils.device import get_device
+from src.utils.logger import setup_logger
 from src.utils.seed import set_seed
 
 
-# Train the complete model.
+# Run the complete training pipeline.
 def main() -> None:
     """
-    Initialize the complete training pipeline.
+    Initialize and execute the complete training workflow.
     """
 
     # Set random seed for reproducibility.
     set_seed(RANDOM_SEED)
 
+    # Configure the project logger.
+    logger = setup_logger(LOG_DIR)
+
     # Select the best available device.
-    device = get_device()
+    device, _ = get_device(logger)
 
     # Create the training DataLoader.
     train_loader = get_train_loader()
@@ -57,7 +61,19 @@ def main() -> None:
     trainer.train()
 
 
-# Run the training pipeline.
+# Execute the training script.
 if __name__ == "__main__":
 
-    main()
+    try:
+
+        main()
+
+    except KeyboardInterrupt:
+
+        print("\nTraining interrupted by user.")
+
+    except Exception as error:
+
+        raise RuntimeError(
+            f"Training failed: {error}"
+        ) from error
