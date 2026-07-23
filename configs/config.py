@@ -119,3 +119,8 @@ TRAINING_LOG_NAME = "training.log"
 HISTORY_CSV_NAME = "history.csv"
 
 METRICS_JSON_NAME = "metrics.json"
+
+# Dataset normalization values.
+DATASET_MEAN = (0.1840,)
+
+DATASET_STD = (0.1895,)
