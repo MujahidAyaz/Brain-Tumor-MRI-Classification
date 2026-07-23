@@ -46,7 +46,12 @@ CLASS_NAMES = (
 
 NUM_CLASSES = len(CLASS_NAMES)
 
+# Dataset
+DATASET_NAME = "Brain Tumor MRI Dataset"
 
+TRAIN_DIR = RAW_DATA_DIR / DATASET_NAME / "Training"
+
+TEST_DIR = RAW_DATA_DIR / DATASET_NAME / "Testing"
 
 # Image
 
