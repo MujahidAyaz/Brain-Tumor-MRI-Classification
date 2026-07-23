@@ -26,7 +26,7 @@ class TrainingHistory:
     # Store epoch execution time.
     epoch_times: list[float] = field(default_factory=list)
 
-    # Add one epoch of results.
+    # Add one epoch of training results.
     def update(
         self,
         train_loss: float,
@@ -65,4 +65,28 @@ class TrainingHistory:
             "learning_rates": self.learning_rates,
 
             "epoch_times": self.epoch_times,
+
         }
+
+    # Restore history from a dictionary.
+    @classmethod
+    def from_dict(
+        cls,
+        history: dict,
+    ):
+
+        instance = cls()
+
+        instance.train_losses = history["train_losses"]
+
+        instance.validation_losses = history["validation_losses"]
+
+        instance.train_accuracies = history["train_accuracies"]
+
+        instance.validation_accuracies = history["validation_accuracies"]
+
+        instance.learning_rates = history["learning_rates"]
+
+        instance.epoch_times = history["epoch_times"]
+
+        return instance

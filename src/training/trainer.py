@@ -1,16 +1,23 @@
 # Import required libraries.
-import logging
 import time
 
+import torch
+
 from torch import nn
-from torch.optim import Adam
+from torch.amp import GradScaler
+from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from configs.config import (
     LEARNING_RATE,
+    WEIGHT_DECAY,
+    LR_FACTOR,
+    LR_PATIENCE,
+    MIN_LR,
     NUM_EPOCHS,
     PATIENCE,
     MIN_DELTA,
+    CHECKPOINT_DIR,
     MODEL_DIR,
 )
 
@@ -19,184 +26,301 @@ from src.training.history import TrainingHistory
 from src.training.early_stopping import EarlyStopping
 from src.training.checkpoint import CheckpointManager
 
+from src.utils.logger import setup_logger
+
 
 class Trainer:
+    """
+    Manage the complete model training pipeline.
+    """
 
-    # Initialize trainer.
+    # Initialize the trainer.
     def __init__(
         self,
-        model,
+        model: nn.Module,
         train_loader,
         validation_loader,
-        device,
-    ):
+        device: torch.device,
+        log_dir,
+    ) -> None:
+
+        self.device = device
 
         self.model = model.to(device)
 
         self.train_loader = train_loader
+
         self.validation_loader = validation_loader
 
-        self.device = device
+        # Configure project logger.
+        self.logger = setup_logger(log_dir)
 
         # Configure loss function.
         self.criterion = nn.CrossEntropyLoss()
 
         # Configure optimizer.
-        self.optimizer = Adam(
-            self.model.parameters(),
+        self.optimizer = AdamW(
+
+            params=self.model.parameters(),
+
             lr=LEARNING_RATE,
+
+            weight_decay=WEIGHT_DECAY,
+
         )
 
-        # Configure learning rate scheduler.
+        # Configure learning-rate scheduler.
         self.scheduler = ReduceLROnPlateau(
-            self.optimizer,
+
+            optimizer=self.optimizer,
+
             mode="min",
-            factor=0.5,
-            patience=2,
+
+            factor=LR_FACTOR,
+
+            patience=LR_PATIENCE,
+
+            min_lr=MIN_LR,
+
         )
 
-        # Configure helper classes.
+        # Configure automatic mixed precision.
+        self.scaler = GradScaler(
+
+            "cuda",
+
+            enabled=device.type == "cuda",
+
+        )
+
+        # Configure training engine.
         self.engine = Engine(
-            self.model,
-            self.criterion,
-            self.optimizer,
-            self.device,
+
+            model=self.model,
+
+            criterion=self.criterion,
+
+            optimizer=self.optimizer,
+
+            device=self.device,
+
+            scaler=self.scaler,
+
         )
 
+        # Configure training history.
         self.history = TrainingHistory()
 
+        # Configure early stopping.
         self.early_stopping = EarlyStopping(
+
             patience=PATIENCE,
+
             min_delta=MIN_DELTA,
+
         )
 
+        # Configure checkpoint manager.
         self.checkpoint = CheckpointManager(
+
             model=self.model,
+
             optimizer=self.optimizer,
+
             scheduler=self.scheduler,
-            checkpoint_path=MODEL_DIR / "last_checkpoint.pth",
+
+            checkpoint_dir=CHECKPOINT_DIR,
+
+            model_dir=MODEL_DIR,
+
         )
 
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(message)s",
-        )
+            # Train the model.
+    def train(self) -> TrainingHistory:
 
-        self.logger = logging.getLogger(__name__)
-
-    # Train the complete model.
-    def train(self):
+        self.logger.info("")
+        self.logger.info("=" * 70)
+        self.logger.info("Starting Brain Tumor MRI Classification Training")
+        self.logger.info("=" * 70)
 
         start_epoch = 0
 
         best_validation_loss = float("inf")
+
         best_validation_accuracy = 0.0
 
-        checkpoint = self.checkpoint.load()
+        total_training_start = time.perf_counter()
+
+        # Resume training if a checkpoint exists.
+        checkpoint = self.checkpoint.load_checkpoint(
+            self.device,
+        )
 
         if checkpoint is not None:
 
             start_epoch = checkpoint["epoch"] + 1
 
-            best_validation_loss = checkpoint["best_validation_loss"]
+            best_validation_loss = checkpoint[
+                "best_validation_loss"
+            ]
 
-            best_validation_accuracy = checkpoint["best_validation_accuracy"]
+            best_validation_accuracy = checkpoint[
+                "best_validation_accuracy"
+            ]
 
-            self.history = checkpoint["history"]
+            self.history = TrainingHistory.from_dict(
+                checkpoint["history"]
+            )
 
             self.logger.info(
-                f"Resuming training from epoch {start_epoch}"
+                f"Resumed from Epoch {start_epoch}"
             )
 
-        self.logger.info(f"\nDevice : {self.device}\n")
+        else:
 
-        for epoch in range(start_epoch, NUM_EPOCHS):
-
-            epoch_start_time = time.perf_counter()
-
-            train_loss, train_accuracy = self.engine.train_one_epoch(
-                self.train_loader
+            self.logger.info(
+                "No checkpoint found. Starting fresh training."
             )
 
-            validation_loss, validation_accuracy = self.engine.validate(
-                self.validation_loader
+        self.logger.info(f"Device          : {self.device}")
+
+        self.logger.info(
+            f"Training Epochs : {NUM_EPOCHS}"
+        )
+
+        self.logger.info("-" * 70)
+
+        for epoch in range(
+            start_epoch,
+            NUM_EPOCHS,
+        ):
+
+            self.logger.info("")
+
+            self.logger.info(
+                f"Epoch [{epoch + 1}/{NUM_EPOCHS}]"
             )
 
-            self.scheduler.step(validation_loss)
+            epoch_start = time.perf_counter()
 
-            learning_rate = self.optimizer.param_groups[0]["lr"]
+            train_loss, train_accuracy = (
+                self.engine.train_one_epoch(
+                    self.train_loader,
+                )
+            )
+
+            validation_loss, validation_accuracy = (
+                self.engine.validate_one_epoch(
+                    self.validation_loader,
+                )
+            )
+
+            self.scheduler.step(
+                validation_loss,
+            )
+
+            learning_rate = (
+                self.optimizer.param_groups[0]["lr"]
+            )
 
             epoch_time = (
                 time.perf_counter()
-                - epoch_start_time
+                - epoch_start
             )
 
             self.history.update(
+
                 train_loss=train_loss,
+
                 validation_loss=validation_loss,
+
                 train_accuracy=train_accuracy,
+
                 validation_accuracy=validation_accuracy,
+
                 learning_rate=learning_rate,
+
                 epoch_time=epoch_time,
+
             )
 
             self.logger.info(
-
-                f"Epoch [{epoch + 1}/{NUM_EPOCHS}] | "
-                f"Train Loss: {train_loss:.4f} | "
-                f"Train Acc: {train_accuracy:.2f}% | "
-                f"Val Loss: {validation_loss:.4f} | "
-                f"Val Acc: {validation_accuracy:.2f}% | "
-                f"LR: {learning_rate:.6f} | "
-                f"Time: {epoch_time:.2f}s"
-
+                f"Train Loss      : {train_loss:.4f}"
             )
 
-            self.checkpoint.save(
-
-                epoch=epoch,
-
-                best_validation_loss=min(
-                    best_validation_loss,
-                    validation_loss,
-                ),
-
-                best_validation_accuracy=max(
-                    best_validation_accuracy,
-                    validation_accuracy,
-                ),
-
-                history=self.history,
-
+            self.logger.info(
+                f"Train Accuracy  : {train_accuracy:.2f}%"
             )
 
+            self.logger.info(
+                f"Validation Loss : {validation_loss:.4f}"
+            )
+
+            self.logger.info(
+                f"Validation Acc  : {validation_accuracy:.2f}%"
+            )
+
+            self.logger.info(
+                f"Learning Rate   : {learning_rate:.6f}"
+            )
+
+            self.logger.info(
+                f"Epoch Time      : {epoch_time:.2f} sec"
+            )
+
+
+                        
+            
+
+            # Save the best model if validation loss improves.
             if validation_loss < best_validation_loss:
 
                 best_validation_loss = validation_loss
 
                 best_validation_accuracy = validation_accuracy
 
-                self.checkpoint.save(
-
-                    epoch=epoch,
-
-                    best_validation_loss=best_validation_loss,
-
-                    best_validation_accuracy=best_validation_accuracy,
-
-                    history=self.history,
-
-                )
-
-            if self.early_stopping(validation_loss):
+                self.checkpoint.save_best_model()
 
                 self.logger.info(
-                    "\nEarly stopping triggered.\n"
+                    "Best model updated."
+                )
+
+            # Save the latest checkpoint after every epoch.
+            self.checkpoint.save_checkpoint(
+
+                epoch=epoch,
+
+                best_validation_loss=best_validation_loss,
+
+                best_validation_accuracy=best_validation_accuracy,
+
+                history=self.history,
+
+            )
+
+            # Check whether training should stop early.
+            if self.early_stopping(
+                validation_loss,
+            ):
+
+                self.logger.info("")
+                self.logger.info(
+                    "Early stopping triggered."
                 )
 
                 break
 
-        self.logger.info("\nTraining completed.\n")
+            self.logger.info("-" * 70)
+
+        total_training_time = (
+            time.perf_counter()
+            - total_training_start
+        )
+
+        self.logger.info("")
+        self.logger.info("=" * 70)
+        self.logger.info("Training Completed")
+        self.logger.info("=" * 70)
 
         self.logger.info(
             f"Best Validation Accuracy : "
@@ -204,6 +328,15 @@ class Trainer:
         )
 
         self.logger.info(
-            f"Best Validation Loss : "
+            f"Best Validation Loss     : "
             f"{best_validation_loss:.4f}"
         )
+
+        self.logger.info(
+            f"Total Training Time      : "
+            f"{total_training_time:.2f} sec"
+        )
+
+        self.logger.info("=" * 70)
+
+        return self.history
