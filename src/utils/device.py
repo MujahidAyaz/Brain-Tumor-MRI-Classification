@@ -1,33 +1,71 @@
 # Import required libraries.
+from typing import Any
+
 import torch
 
+from logging import Logger
 
-# Select the best available device.
-def get_device():
 
+def get_device(
+    logger: Logger,
+) -> tuple[torch.device, dict[str, Any]]:
+    """
+    Detect the best available device and log its information.
+
+    Parameters
+    ----------
+    logger : Logger
+        Configured project logger.
+
+    Returns
+    -------
+    tuple
+        Selected torch device and device information.
+    """
+
+    # Configure CPU information.
+    device = torch.device("cpu")
+
+    device_info = {
+        "device": "CPU",
+        "gpu_name": None,
+        "gpu_memory": None,
+        "gpu_count": 0,
+        "torch_version": torch.__version__,
+    }
+
+    # Use CUDA if available.
     if torch.cuda.is_available():
 
         device = torch.device("cuda")
 
-        device_name = torch.cuda.get_device_name(0)
+        device_info.update({
+            "device": "CUDA",
+            "gpu_name": torch.cuda.get_device_name(0),
+            "gpu_memory": round(
+                torch.cuda.get_device_properties(0).total_memory
+                / (1024 ** 3),
+                2,
+            ),
+            "gpu_count": torch.cuda.device_count(),
+        })
 
-        total_memory = (
-            torch.cuda.get_device_properties(0).total_memory
-            / (1024 ** 3)
-        )
+    # Otherwise use Apple MPS if available.
+    elif torch.backends.mps.is_available():
 
-        print(f"Device      : CUDA")
-        print(f"GPU         : {device_name}")
-        print(f"GPU Memory  : {total_memory:.2f} GB")
+        device = torch.device("mps")
 
-        return device
+        device_info["device"] = "Apple MPS"
 
-    if torch.backends.mps.is_available():
+    # Log device information.
+    logger.info("Device Information")
+    logger.info(f"Device          : {device_info['device']}")
+    logger.info(f"PyTorch Version : {device_info['torch_version']}")
 
-        print("Device      : Apple MPS")
+    if device_info["gpu_name"] is not None:
 
-        return torch.device("mps")
+        logger.info(f"GPU             : {device_info['gpu_name']}")
+        logger.info(f"GPU Memory      : {device_info['gpu_memory']} GB")
+        logger.info(f"GPU Count       : {device_info['gpu_count']}")
 
-    print("Device      : CPU")
-
-    return torch.device("cpu")
+    return device, device_info
