@@ -1,29 +1,47 @@
+# Import required libraries.
 from torch.utils.data import DataLoader
 
 from configs.config import (
     BATCH_SIZE,
     NUM_WORKERS,
-    PIN_MEMORY,
 )
-
-from src.data.dataset import (
-    train_dataset,
-    test_dataset,
+from src.data.datasets import (
+    get_test_dataset,
+    get_train_dataset,
 )
 
 
-train_loader = DataLoader(
-    dataset=train_dataset,
-    batch_size=BATCH_SIZE,
-    shuffle=True,
-    num_workers=NUM_WORKERS,
-    pin_memory=PIN_MEMORY,
-)
+# Create the training DataLoader.
+def get_train_loader() -> DataLoader:
+    """
+    Create and return the training DataLoader.
+    """
 
-test_loader = DataLoader(
-    dataset=test_dataset,
-    batch_size=BATCH_SIZE,
-    shuffle=False,
-    num_workers=NUM_WORKERS,
-    pin_memory=PIN_MEMORY,
-)
+    train_dataset = get_train_dataset()
+
+    return DataLoader(
+        dataset=train_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        num_workers=NUM_WORKERS,
+        pin_memory=False,
+        persistent_workers=NUM_WORKERS > 0,
+    )
+
+
+# Create the testing DataLoader.
+def get_test_loader() -> DataLoader:
+    """
+    Create and return the testing DataLoader.
+    """
+
+    test_dataset = get_test_dataset()
+
+    return DataLoader(
+        dataset=test_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        num_workers=NUM_WORKERS,
+        pin_memory=False,
+        persistent_workers=NUM_WORKERS > 0,
+    )
