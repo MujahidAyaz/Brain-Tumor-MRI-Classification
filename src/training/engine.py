@@ -1,33 +1,46 @@
 # Import required libraries.
 import torch
 
+from torch import nn
+from torch.amp import GradScaler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+from configs.config import GRADIENT_CLIP
 
 
 class Engine:
+    """
+    Handle one epoch of training and validation.
+    """
 
-    # Initialize training engine.
+    # Initialize the training engine.
     def __init__(
         self,
-        model,
-        criterion,
-        optimizer,
-        device,
-    ):
+        model: nn.Module,
+        criterion: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        device: torch.device,
+        scaler: GradScaler,
+    ) -> None:
 
         self.model = model
 
         self.criterion = criterion
-        
+
         self.optimizer = optimizer
 
         self.device = device
 
+        self.scaler = scaler
+
+        self.use_amp = device.type == "cuda"
+
     # Train the model for one epoch.
     def train_one_epoch(
         self,
-        dataloader,
-    ):
+        dataloader: DataLoader,
+    ) -> tuple[float, float]:
 
         self.model.train()
 
@@ -56,23 +69,36 @@ class Engine:
                 non_blocking=True,
             )
 
-            self.optimizer.zero_grad()
-
-            outputs = self.model(images)
-
-            loss = self.criterion(
-                outputs,
-                labels,
+            self.optimizer.zero_grad(
+                set_to_none=True,
             )
 
-            loss.backward()
+            with torch.autocast(
+                device_type=self.device.type,
+                enabled=self.use_amp,
+            ):
+
+                outputs = self.model(images)
+
+                loss = self.criterion(
+                    outputs,
+                    labels,
+                )
+
+            self.scaler.scale(loss).backward()
+
+            self.scaler.unscale_(self.optimizer)
 
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),
-                max_norm=1.0,
+                max_norm=GRADIENT_CLIP,
             )
 
-            self.optimizer.step()
+            self.scaler.step(
+                self.optimizer,
+            )
+
+            self.scaler.update()
 
             running_loss += loss.item()
 
@@ -95,11 +121,17 @@ class Engine:
                 / total_samples
             )
 
+            current_lr = (
+                self.optimizer.param_groups[0]["lr"]
+            )
+
             progress_bar.set_postfix(
 
                 Loss=f"{current_loss:.4f}",
 
                 Acc=f"{current_accuracy:.2f}%",
+
+                LR=f"{current_lr:.6f}",
 
             )
 
@@ -116,12 +148,12 @@ class Engine:
 
         return epoch_loss, epoch_accuracy
 
-    # Validate the model.
+    # Validate the model for one epoch.
     @torch.inference_mode()
-    def validate(
+    def validate_one_epoch(
         self,
-        dataloader,
-    ):
+        dataloader: DataLoader,
+    ) -> tuple[float, float]:
 
         self.model.eval()
 
@@ -150,12 +182,17 @@ class Engine:
                 non_blocking=True,
             )
 
-            outputs = self.model(images)
+            with torch.autocast(
+                device_type=self.device.type,
+                enabled=self.use_amp,
+            ):
 
-            loss = self.criterion(
-                outputs,
-                labels,
-            )
+                outputs = self.model(images)
+
+                loss = self.criterion(
+                    outputs,
+                    labels,
+                )
 
             running_loss += loss.item()
 

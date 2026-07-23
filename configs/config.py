@@ -125,7 +125,14 @@ HISTORY_CSV_NAME = "history.csv"
 
 METRICS_JSON_NAME = "metrics.json"
 
+# Gradient clipping.
+GRADIENT_CLIP = 1.0
+
 # Dataset normalization values.
 DATASET_MEAN = (0.1840,)
 
 DATASET_STD = (0.1895,)
+
+
+
+
