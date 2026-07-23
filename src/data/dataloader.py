@@ -12,9 +12,16 @@ from src.data.datasets import (
 
 
 # Create the training DataLoader.
-def get_train_loader() -> DataLoader:
+def get_train_loader(
+    pin_memory: bool = False,
+) -> DataLoader:
     """
     Create and return the training DataLoader.
+
+    Parameters
+    ----------
+    pin_memory : bool, optional
+        Enable pinned memory for faster GPU data transfer.
     """
 
     train_dataset = get_train_dataset()
@@ -24,15 +31,22 @@ def get_train_loader() -> DataLoader:
         batch_size=BATCH_SIZE,
         shuffle=True,
         num_workers=NUM_WORKERS,
-        pin_memory=False,
+        pin_memory=pin_memory,
         persistent_workers=NUM_WORKERS > 0,
     )
 
 
 # Create the testing DataLoader.
-def get_test_loader() -> DataLoader:
+def get_test_loader(
+    pin_memory: bool = False,
+) -> DataLoader:
     """
     Create and return the testing DataLoader.
+
+    Parameters
+    ----------
+    pin_memory : bool, optional
+        Enable pinned memory for faster GPU data transfer.
     """
 
     test_dataset = get_test_dataset()
@@ -42,6 +56,6 @@ def get_test_loader() -> DataLoader:
         batch_size=BATCH_SIZE,
         shuffle=False,
         num_workers=NUM_WORKERS,
-        pin_memory=False,
+        pin_memory=pin_memory,
         persistent_workers=NUM_WORKERS > 0,
     )
