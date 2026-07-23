@@ -173,7 +173,11 @@ class Trainer:
             )
 
             self.logger.info(
-                f"Resumed from Epoch {start_epoch}"
+                f"Checkpoint loaded successfully."
+            )
+
+            self.logger.info(
+                f"Continuing training from Epoch {start_epoch + 1}."
             )
 
         else:
