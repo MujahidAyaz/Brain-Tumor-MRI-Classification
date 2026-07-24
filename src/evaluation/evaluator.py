@@ -41,9 +41,6 @@ class Evaluator:
 
         self.model.eval()
 
-        predictions.clear()
-        targets.clear()
-
         predictions : list[int] = []
 
         targets : list[int] = []
