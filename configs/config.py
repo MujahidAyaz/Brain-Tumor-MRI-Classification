@@ -52,8 +52,8 @@ IMAGE_SIZE = (224, 224)
 
 NUM_CHANNELS = 1
 
+# Dataset normalization.
 DATASET_MEAN = (0.1840,)
-
 DATASET_STD = (0.1895,)
 
 
@@ -105,3 +105,20 @@ TRAINING_LOG_NAME = "training.log"
 HISTORY_CSV_NAME = "history.csv"
 
 METRICS_JSON_NAME = "metrics.json"
+
+# Evaluation reports.
+CLASSIFICATION_REPORT_NAME = "classification_report.txt"
+
+CONFUSION_MATRIX_CSV_NAME = "confusion_matrix.csv"
+
+# Prediction outputs.
+PREDICTIONS_CSV_NAME = "predictions.csv"
+
+# Saved plots.
+LOSS_CURVE_NAME = "loss_curve.png"
+
+ACCURACY_CURVE_NAME = "accuracy_curve.png"
+
+LEARNING_RATE_CURVE_NAME = "learning_rate_curve.png"
+
+CONFUSION_MATRIX_PLOT_NAME = "confusion_matrix.png"
